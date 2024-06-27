@@ -27,7 +27,7 @@ public:
     using ConstraintValues = typename CostUnionType::template ConstraintValues<ConsType>;
     constexpr static double kDefaultConstraintEpsilon = 1.0e-3;
     constexpr static double kTol = 1.0e-6;
-    constexpr static double kConvRateTol = 2;
+    constexpr static double kConvRateTol = 1;
     constexpr static int kMaxLineSearchIter = 20;
     constexpr static int kMaxInnerIter = 10;
     constexpr static int kMaxOuterIter = 10;
@@ -146,7 +146,7 @@ private:
         int index = 0;
         eq_active_sets_.clear();
         ineq_active_sets_.clear();
-        for (auto &cons_ptr : solver_->Problem().GetCostUnionPtr()->GetEqConstraints()) {
+        for (auto &cons_ptr : solver_->Problem().GetCostUnionPtr()->GetImmutableEqConstraints()) {
             bool success = cons_ptr->Evaluate(step, x, u);
             if (success) {
                 double cons_val = cons_ptr->ConsVal();
@@ -165,7 +165,7 @@ private:
         }
 
         index = 0;
-        for (auto &cons_ptr : solver_->Problem().GetCostUnionPtr()->GetIneqConstraints()) {
+        for (auto &cons_ptr : solver_->Problem().GetCostUnionPtr()->GetImmutableIneqConstraints()) {
             bool success = cons_ptr->Evaluate(step, x, u);
             if (success) {
                 double cons_val = cons_ptr->ConsVal();
@@ -198,17 +198,17 @@ private:
                                 MatrixXd& d) {
         vector<double> violations;
         for (const int &ind : eq_active_sets_) {
-            bool success = solver_->Problem().GetCostUnionPtr()->GetEqConstraints()[ind]->Evaluate(step, x, u);
+            bool success = solver_->Problem().GetCostUnionPtr()->GetImmutableEqConstraints()[ind]->Evaluate(step, x, u);
             if (success) {
-                double cons_val = solver_->Problem().GetCostUnionPtr()->GetEqConstraints()[ind]->ConsVal();
+                double cons_val = solver_->Problem().GetCostUnionPtr()->GetImmutableEqConstraints()[ind]->ConsVal();
                 violations.emplace_back(cons_val);
             }
         }
 
         for (const int &ind : ineq_active_sets_) {
-            bool success = solver_->Problem().GetCostUnionPtr()->GetIneqConstraints()[ind]->Evaluate(step, x, u);
+            bool success = solver_->Problem().GetCostUnionPtr()->GetImmutableIneqConstraints()[ind]->Evaluate(step, x, u);
             if (success) {
-                double cons_val = solver_->Problem().GetCostUnionPtr()->GetIneqConstraints()[ind]->ConsVal();
+                double cons_val = solver_->Problem().GetCostUnionPtr()->GetImmutableIneqConstraints()[ind]->ConsVal();
                 violations.emplace_back(cons_val);
             }
         }
@@ -277,37 +277,41 @@ private:
             }
             if (loop > kMaxOuterIter)
                 break;
-            double r = std::numeric_limits<double>::infinity();
+
             int inner_loop = 0;
+            MatrixXd S_inv;
+            double S_inv_;
+            MatrixXd delta_z;
+            if (linearized_active_cons == JacSize::Jacobian) {
+                Eigen::LLT<MatrixXd> llt(S);
+                if (llt.info() == Eigen::Success) {
+                    S_inv = S.inverse();
+                }
+                else {
+                    S_inv = PseudoInverse(S);
+                }
+
+                if (!S_inv.allFinite() or S_inv.array().isNaN().any()) {
+//                        cout << "Failed to calc inverse of Matrix S\n";
+                    return;
+                }
+            } else {
+                S_inv_ = 1.0 / S_;
+            }
+            double r = std::numeric_limits<double>::infinity();
             while (true) {
                 // line search
                 double alpha = 1.0;
                 double gamma = 0.5;
-                MatrixXd S_inv;
-                double S_inv_;
-                MatrixXd delta_z;
-                if (linearized_active_cons == JacSize::Jacobian) {
-                    Eigen::LLT<MatrixXd> llt(S);
-                    if (llt.info() == Eigen::Success) {
-                        S_inv = S.inverse();
-                    }
-                    else {
-                        S_inv = PseudoInverse(S);
-                    }
-
-                    if (!S_inv.allFinite() or S_inv.array().isNaN().any()) {
-//                        cout << "Failed to calc inverse of Matrix S\n";
-                        return;
-                    }
+                if (linearized_active_cons == JacSize::Jacobian)
                     delta_z = H_inv * D.transpose() * (S_inv * S_inv.transpose() * d);
-                } else {
-                    S_inv_ = 1.0 / S_;
+                else if (linearized_active_cons == JacSize::Gradient)
                     delta_z = H_inv * D.transpose() * (S_inv_ * S_inv_ * d);
-                }
 //                cout << "delta_z: \n" << delta_z << endl;
+                double v0;
                 State x_n;
                 Control u_n;
-                double v0;
+                bool flag = false;
                 for (int i = 0; i < kMaxLineSearchIter; ++i) {
 //                    cout << "line search " << i << endl;
                     x_n = x + alpha * delta_z.topRows(M);
@@ -316,17 +320,21 @@ private:
                     v0 = d.lpNorm<Eigen::Infinity>();
 //                    cout << "v0=" << v0 << " v=" << v << endl;
                     if (v0 < v) {
-                        cout << "line search successfully\n";
+//                        cout << "line search successfully\n";
                         x = x_n;
                         u = u_n;
+                        flag = true;
                         break;
                     }
                     alpha *= gamma;
                 }
-                r = std::log(v0 + 1.0e-8) / std::log(v);
-//                cout << "r=" << r << endl;
+                // end line search
+                r = std::log(v0) / std::log(v);
+                if (flag)
+                    v = v0;
                 if (v < kTol or r < kConvRateTol) {
-//                    cout << inner_loop << " " << endl;
+//                    cout << "line search successfully\n";
+//                    cout << "r=" << r << endl;
 //                    cout << "v=" << v << endl;
                     x = x_n;
                     u = u_n;
