@@ -1,5 +1,5 @@
 //
-// Created by Sommer  on 2024/5/30.
+// Created by 廖田志浩 on 2024/5/30.
 //
 
 #ifndef CILQR_OCP_PROBLEM_HPP
@@ -7,9 +7,7 @@
 
 #include "model.h"
 #include "cost_calc.h"
-#include "cost_term_config.hpp"
 #include <memory>
-#include <type_traits>
 
 template<typename T, unsigned int M, unsigned int N>
 class OCPInterface {
@@ -26,16 +24,20 @@ public:
         return cost_union_->Evaluate(step, x, u);
     };
 
-    const std::unique_ptr<CostUnion<T, M, N>> &GetCostUnion() const {
+    const CostUnionPtr<T, M, N> &GetCostUnionPtr() const {
         return cost_union_;
     };
 
+    CostUnion<T, M, N> GetCostUnion() const {
+        return *cost_union_;
+    }
+
     void SetModel(std::unique_ptr<Model<T, M, N>> &&model) {
-        model_.reset(model);
+        model_.swap(model);
     }
 
     void SetCostUnion(std::unique_ptr<CostUnion<T, M, N>> &&cost_union) {
-        cost_union_.reset(cost_union);
+        cost_union_.swap(cost_union);
         cost_union_->SetHorizon(config_.steps.size());
     }
 
@@ -62,6 +64,12 @@ public:
         cost_union_->AddCostTerm(std::make_unique<CT>(config_));
     }
 
+//    template<typename ConsType,
+//            typename std::enable_if<std::is_same<ConsType, Equality>::value, int> = 0>
+//    void AddConstraint(ConstraintValuePtr<T, M, N, ConsType> &&constraint_value) {
+//        cost_union_->template AddConstraint(std::move(constraint_value));
+//    }
+
     void AddEqConstraint(ConstraintValuePtr<T, M, N, Equality> &&constraint_value) {
         cost_union_->AddEqConstraint(std::move(constraint_value));
     }
@@ -69,6 +77,13 @@ public:
     void AddIneqConstraint(ConstraintValuePtr<T, M, N, Inequality> &&constraint_value) {
         cost_union_->AddIneqConstraint(std::move(constraint_value));
     }
+
+
+//    template<typename ConsType,
+//            typename std::enable_if<std::is_same<ConsType, Inequality>::value, int> = 0>
+//    void AddConstraint(ConstraintValuePtr<T, M, N, ConsType> &&constraint_value) {
+//        cost_union_->AddConstraint(constraint_value);
+//    }
 
 protected:
     std::unique_ptr<Model<T, M, N>> model_;

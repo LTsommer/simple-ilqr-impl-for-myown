@@ -1,11 +1,11 @@
 //
-// Created by Sommer  on 2024/6/6.
+// Created by 廖田志浩 on 2024/6/6.
 //
 
 #ifndef CILQR_MODEL_H
 #define CILQR_MODEL_H
 
-#include "ilqr_system_declaration.hpp"
+#include "../ilqr_system_declaration.hpp"
 
 template<typename T, unsigned int M, unsigned int N>
 class Model {

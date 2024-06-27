@@ -1,14 +1,18 @@
 //
-// Created by Sommer  on 2024/5/31.
+// Created by 廖田志浩 on 2024/5/31.
 //
 
 #ifndef CILQR_COST_TERM_CONFIG_HPP
 #define CILQR_COST_TERM_CONFIG_HPP
 
-#include "ilqr_system_declaration.hpp"
+#include "../ilqr_system_declaration.hpp"
 #include <unordered_map>
 #include <vector>
 #include <typeindex>
+
+typedef std::unordered_map<std::type_index, std::string> Type_names;
+
+enum BoundType { Default, Others };
 
 enum WeightIndex {
     WeightAcc,    // acceleration term
@@ -42,10 +46,15 @@ struct CostTermConfig {
     std::vector<double> yaw;
     std::vector<double> s;
     std::vector<double> t;
-    std::vector<Vector2d> p_ref;
+    std::vector<Vector2d> p_ref;     // reference points: p_ref[i] = [x, y]
     std::vector<double> steps;
+    std::vector<double> ref_factors; // weight discount factor for each p_ref[i]
     std::vector<double> u_min{};
     std::vector<double> u_max{};
+    std::vector<std::vector<Vector2d>> p_bound; // left bound p1->p2 and right
+    // bound p3->p4 of each ref point
+    // p_bound[i] = {p1, p2, p3, p4}
+    std::array<std::vector<BoundType>, 2> boundary_types;
     double safe_dist = 1.0;
     double final_yaw_rate;
     double final_yaw;

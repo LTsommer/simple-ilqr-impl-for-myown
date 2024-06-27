@@ -1,11 +1,12 @@
 //
-// Created by Sommer  on 2024/6/20.
+// Created by 廖田志浩 on 2024/6/20.
 //
 
 #ifndef ALILQR_COST_FUNCTION_HPP
 #define ALILQR_COST_FUNCTION_HPP
 
-#include "ilqr_system_declaration.hpp"
+#include "../ilqr_system_declaration.hpp"
+#include <typeindex>
 
 template<typename T, unsigned M, unsigned N>
 class FunctionBase {
@@ -37,6 +38,10 @@ public:
 
     void set_horizon(const int &step) {
         horizon = step;
+    }
+
+    virtual std::type_index get_type_index() {
+        return std::type_index(typeid(CostFunc));
     }
 
     virtual bool Evaluate(const int step, const State &x, const Control &u, double &val) const = 0;

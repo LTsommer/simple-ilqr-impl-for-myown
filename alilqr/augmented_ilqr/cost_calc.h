@@ -1,5 +1,5 @@
 //
-// Created by Sommer  on 2024/5/30.
+// Created by 廖田志浩 on 2024/5/30.
 //
 
 #ifndef CILQR_COST_CALC_H
@@ -45,7 +45,7 @@ public:
                           Eigen::Ref<VecX> lx,
                           Eigen::Ref<VecU> lu) const;
 
-    void CalcCostHessian(const int staep, const State &x, const Control &u,
+    void CalcCostHessian(const int step, const State &x, const Control &u,
                          Eigen::Ref<MatrixLXX> lxx,
                          Eigen::Ref<MatrixLUU> luu,
                          Eigen::Ref<MatrixLXU> lxu) const;
@@ -84,6 +84,11 @@ public:
 
     ConstraintValues<Inequality> &GetIneqConstraints() {return ineqs_;}
 
+    const ConstraintValues<Equality> &GetImmutableEqConstraints() const {return eqs_;}
+
+    const ConstraintValues<Inequality> &GetImmutableIneqConstraints() const {return ineqs_;}
+
+    const CostFuncs &GetCostTerms() const {return cost_terms_;}
 private:
     CostTermConfig config_;
     CostFuncs cost_terms_;
@@ -94,8 +99,10 @@ private:
     VecX pN;
     MatrixLXX PN;
     int horizon_;
-    double max_violation_ = std::numeric_limits<double>::min();
+    double max_violation_ = std::numeric_limits<double>::max();
 };
 
+template<typename T, unsigned M, unsigned N>
+using CostUnionPtr = std::unique_ptr<CostUnion<T, M, N>>;
 
 #endif //CILQR_COST_CALC_H

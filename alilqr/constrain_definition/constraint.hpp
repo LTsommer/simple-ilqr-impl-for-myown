@@ -1,12 +1,11 @@
 //
-// Created by Sommer  on 2024/6/20.
+// Created by 廖田志浩 on 2024/6/20.
 //
 
 #ifndef ALILQR_CONSTRAINT_HPP
 #define ALILQR_CONSTRAINT_HPP
 
-#include "cost_function.hpp"
-#include "ilqr_system_declaration.hpp"
+#include "../cost_function/cost_function.hpp"
 #include <cmath>
 #include <iostream>
 #include <memory>
@@ -54,6 +53,13 @@ class Constraint : public FunctionBase<T, M, N> {
 public:
     OCP_VARIABLES(T, M, N)
     Constraint() = default;
+
+    virtual std::type_index get_type_index() {
+        return std::type_index(typeid(Constraint));
+    }
+
+
+
     virtual ~Constraint() = default;
 
     virtual bool Evaluate(const int step, const State &x, const Control &u, double &val) const = 0;

@@ -1,12 +1,12 @@
 //
-// Created by Sommer  on 2024/6/20.
+// Created by 廖田志浩 on 2024/6/20.
 //
 
 #ifndef ALILQR_CONSTRAINT_VALUES_HPP
 #define ALILQR_CONSTRAINT_VALUES_HPP
 
 #include "constraint.hpp"
-#include "ilqr_system_declaration.hpp"
+#include "../ilqr_system_declaration.hpp"
 #include <iostream>
 
 template <typename T, unsigned M, unsigned N, class ConsType>
@@ -37,7 +37,7 @@ public:
     double GetPenalty() const {return penalty_;}
 
     void LoadConstraint(ConstraintPtr<T, M, N, ConsType> && cons) {
-        cons_ptr_.reset(cons);
+        cons_ptr_.swap(cons);
     };
 
     double ConsVal() { return cons_val_; }
@@ -49,14 +49,23 @@ public:
     VecU GradientU() { return grad_u_; }
 
     bool Evaluate(const int step, const State &x, const Control &u) {
+//        cons_ptr_->GetConstraintType();
         bool success = cons_ptr_->Evaluate(step, x, u, cons_val_);
         if (success) {
             ctg_val_ = (lambda_ + 0.5 * cons_val_ * penalty_) * cons_val_;
+//            violations_.emplace_back(std::fabs(cons_val_));
             return success;
         }
         ctg_val_ = 0.0;
         return false;
     }
+
+//    double MaxViolation() {
+//        auto iter = std::max_element(violations_.begin(), violations_.end());
+//        double max_val = violations_[std::distance(violations_.begin(), iter)];
+//        violations_.clear();
+//        return max_val;
+//    }
 
     void Gradient(const int step, const State &x, const Control &u) {
         grad_x_.setZero();
@@ -84,13 +93,7 @@ private:
     VecU grad_u_;
     ConstraintPtr<T, M, N, ConsType> cons_ptr_;
     vector<double> violations_;
-
-public:
-    static double max_violation_;
 };
-
-template<typename T, unsigned M, unsigned N, class ConsType>
-double ConstraintValue<T, M, N, ConsType>::max_violation_ = std::numeric_limits<double>::min();
 
 template<typename T, unsigned M, unsigned N, class ConsType>
 using ConstraintValuePtr = std::unique_ptr<ConstraintValue<T, M, N, ConsType>>;

@@ -1,11 +1,11 @@
 //
-// Created by Sommer  on 2024/5/30.
+// Created by 廖田志浩 on 2024/5/30.
 //
 
 #ifndef CILQR_ILQR_PROCESS_H
 #define CILQR_ILQR_PROCESS_H
 
-#include "ilqr_system_declaration.hpp"
+#include "../ilqr_system_declaration.hpp"
 
 enum class SolverStatus {
     OCPSolved,
@@ -51,29 +51,30 @@ struct ILQRSolverState {
     const States &x_seq() const { return x_seq_; }
     const Controls u_seq() const { return u_seq_; }
 
-    State x0_;
-    States x_seq_;
-    Controls u_seq_;
-    double cost_;
+    State x0_;      // initial state
+    States x_seq_;  // current working state sequence
+    Controls u_seq_; // current working control sequence
+    double cost_;   // current working cost value
 
-    MatrixLXXs fx_;
-    MatrixLXUs fu_;
-    VecXs lx_;
-    VecUs lu_;
-    VecXs cx_;
-    VecUs cu_;
-    MatrixLXXs lxx_;
-    MatrixLXUs lxu_;
-    MatrixLUUs luu_;
-    MatrixLXXs cxx_;
-    MatrixLXUs cxu_;
-    MatrixLUUs cuu_;
+    // M = dims(state), N = dims(control)
+    MatrixLXXs fx_;  // M * M * (T+1), jacobian of f w.r.t x
+    MatrixLXUs fu_;  // M * N * (T+1), jacobian of f w.r.t u
+    VecXs lx_;       // M * (T+1), gradient of cost w.r.t x
+    VecUs lu_;       // N * (T+1), gradient of cost w.r.t u
+    VecXs cx_;       // M * (T+1), augmented lag gradient of constraint w.r.t x : c_x * (lambda + penalty * c(x, u))
+    VecUs cu_;       // N * (T+1), augmented lag gradient of constraint w.r.t u : c_u * (lambda + penalty * c(x, u))
+    MatrixLXXs lxx_; // M * M * (T+1), hessian of cost w.r.t x
+    MatrixLXUs lxu_; // M * N * (T+1), hessian of cost w.r.t x, u
+    MatrixLUUs luu_; // N * N * (T+1), hessian of cost w.r.t u
+    MatrixLXXs cxx_; // M * M * (T+1), augmented lag hessian of cost w.r.t x : c_x * penalty * c_x
+    MatrixLXUs cxu_; // N * N * (T+1), augmented lag hessian of cost w.r.t x, u : c_x * penalty * c_u
+    MatrixLUUs cuu_; // N * N * (T+1), augmented lag hessian of cost w.r.t u : c_u * penalty * c_u
 
-    Vector2d dV_;
-    VecXs Vx_;
-    MatrixLXXs Vxx_;
-    VecUs k_;
-    MatrixLUXs K_;
+    Vector2d dV_;    // delta_V 2 * 1
+    VecXs Vx_;       // M * (T+1)
+    MatrixLXXs Vxx_; // M * M * (T+1)
+    VecUs k_;        // N * T, open loop gain term
+    MatrixLUXs K_;   // N * M * T, feedback gain term
 
     VecX Qx_;
     VecU Qu_;

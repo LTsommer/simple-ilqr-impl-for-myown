@@ -1,5 +1,5 @@
 //
-// Created by Sommer  on 2024/5/30.
+// Created by 廖田志浩 on 2024/5/30.
 //
 
 #include "cost_calc.h"
@@ -167,12 +167,13 @@ void CostUnion<T, M , N>::CalcTerminalCostToGo(const State &x) {
 
 template<typename T, unsigned M, unsigned N>
 void CostUnion<T, M, N>::EvaluateConstraints(const States &x, const Controls &u) {
+    max_violation_ = std::numeric_limits<double>::infinity();
     for (int t = 0; t < horizon_; ++t) {
         for (const auto &cons_ptr : eqs_) {
             bool success = cons_ptr->Evaluate(t, x[t], u[t]);
             if (success) {
                 double cons_val = cons_ptr->ConsVal();
-                max_violation_ = std::max(max_violation_, std::fabs(cons_val));
+                max_violation_ = std::min(max_violation_, cons_val);
             }
         }
 
@@ -180,11 +181,29 @@ void CostUnion<T, M, N>::EvaluateConstraints(const States &x, const Controls &u)
             bool success = cons_ptr->Evaluate(t, x[t], u[t]);
             if (success) {
                 double cons_val = cons_ptr->ConsVal();
-                max_violation_ = std::max(max_violation_, std::fabs(cons_val));
+                max_violation_ = std::min(max_violation_, cons_val);
             }
         }
     }
 }
+
+//template<typename T, unsigned M, unsigned N>
+//double CostUnion<T, M, N>::GetMaxViolation() {
+//    for (const auto &cons_ptr : eqs_) {
+//        double cur_max_violation = cons_ptr->MaxViolation();
+//        max_violation_ = std::max(max_violation_, cur_max_violation);
+//    }
+//    for (const auto &cons_ptr : ineqs_) {
+//        double cur_max_violation = cons_ptr->MaxViolation();
+//        max_violation_ = std::max(max_violation_, cur_max_violation);
+//    }
+//}
+
+//template<typename T, unsigned M, unsigned N>
+//void CostUnion<T, M, N>::ResetViolations() {
+//    eqc_violations_.setConstant(Eigen::Infinity);
+//    ineqc_violations_.setConstant(Eigen::Infinity);
+//}
 
 template class CostUnion<double, 5, 1>;
 
