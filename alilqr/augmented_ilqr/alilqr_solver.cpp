@@ -41,7 +41,7 @@ void ILQRSolver<T, M, N>::GenerateTrajectory(ILQRSolverState<T, M, N> *ilqr_stat
     States x_old;
     Controls u_old;
 
-    bool need_to_recompute = true; // if to recompute derivatives
+    bool reinit_solver_state = true; // if to recompute derivatives
     StopWatch stop_watch_total;
     stop_watch_total.start();
     uint32_t derivative_time_microseconds = 0U;
@@ -56,16 +56,9 @@ void ILQRSolver<T, M, N>::GenerateTrajectory(ILQRSolverState<T, M, N> *ilqr_stat
 
         StopWatch stop_watch;
         stop_watch.start();
-        if (need_to_recompute) {
+        if (reinit_solver_state) {
             InitializeILQRSolverState(ilqr_state);
-//            CalcKinematicsDerivatives(ilqr_state->x_seq_, ilqr_state->u_seq_,
-//                                      &(ilqr_state->fx_), &(ilqr_state->fu_));
-//            CalcCostDerivatives(ilqr_state->x_seq_, ilqr_state->u_seq_,
-//                                &(ilqr_state->lx_), &(ilqr_state->lu_));
-//            CalcCost2ndDerivatives(ilqr_state->x_seq_, ilqr_state->u_seq_,
-//                                   &(ilqr_state->lxx_), &(ilqr_state->lxu_),
-//                                   &(ilqr_state->luu_));
-            need_to_recompute = false;
+            reinit_solver_state = false;
         }
         derivative_time_microseconds += stop_watch.elapsed_microseconds();
         //--------------------------------------------------------------------------
@@ -75,16 +68,6 @@ void ILQRSolver<T, M, N>::GenerateTrajectory(ILQRSolverState<T, M, N> *ilqr_stat
         // update Vx, Vxx, l, L, dV with backward_pass
         BackwardProcess(ilqr_state);
         backward_time_microseconds += stop_watch.elapsed_microseconds();
-
-        // check for termination due to small gradient
-         // norm of the gradient
-
-//        if (gnorm < kTolGrad_ && ilqr_state->rho_ < krhoMinGrad_) {
-////        NLOGD("SUCCESS: gradient norm < tolGrad");
-//            cout << "SUCCESS: gradient norm < tolGrad\n";
-//            break;
-//        }
-
         //--------------------------------------------------------------------------
         // STEP 3: Forward pass / line-search to find new control sequence,
         // trajectory, cost
@@ -101,13 +84,11 @@ void ILQRSolver<T, M, N>::GenerateTrajectory(ILQRSolverState<T, M, N> *ilqr_stat
 
         ilqr_state->g_norm_ = GetGradientNorm(ilqr_state->k_, ilqr_state->u_seq_);
         if (ilqr_state->g_norm_ < kTolGrad_ and dcost > 0.0) {
-//        NLOGD("SUCCESS: gradient norm < tolGrad");
             ilqr_state->status_ = SolverStatus::OCPSolved;
             cout << "SUCCESS: gradient norm < tolGrad\n";
             break;
         }
         forward_time_microseconds += stop_watch.elapsed_microseconds();
-//        cout << problem().GetCostUnion()->GetMaxViolation() << "\n";
 
         //--------------------------------------------------------------------------
         // STEP 4: accept step (or not), log status
@@ -119,7 +100,7 @@ void ILQRSolver<T, M, N>::GenerateTrajectory(ILQRSolverState<T, M, N> *ilqr_stat
         }
 
         if (is_fwd_pass_done) {
-            need_to_recompute = true;
+            reinit_solver_state = true;
             // terminate if cost reduction is small enough
             if (dcost < kTolFun_) {
                 //        NLOGD("SUCCESS: cost change < tolFun");
@@ -127,11 +108,7 @@ void ILQRSolver<T, M, N>::GenerateTrajectory(ILQRSolverState<T, M, N> *ilqr_stat
                 cout << "SUCCESS: cost change < tolFun\n";
                 break;
             }
-        } else { // no cost improvement
-            //      NLOGW("Iteration %d: Forward pass failed when line searching",
-            //      iter); NLOGD("%-12d\t%-12s\t%-12.3g\t%-12.3g\t%-12.3g\t%-12.1f",
-            //      iter, "NO STEP",
-            //            dcost, expected, gnorm, log10(ilqr_state->lambda_));
+        } else {
 //            cout << "Iteration " << iter << ": Forward pass failed when line searching\n";
 
             IncreaseRho(ilqr_state->drho_, ilqr_state->rho_);
@@ -145,7 +122,6 @@ void ILQRSolver<T, M, N>::GenerateTrajectory(ILQRSolverState<T, M, N> *ilqr_stat
         UpdateDualsAndPenalties(ilqr_state);
 
         if (iter == kMaxIter_) {
-//      NLOGD("EXIT: Maximum iterations reached");
             if (ilqr_state->status_ != SolverStatus::OCPSolved)
                 ilqr_state->status_ = SolverStatus::MaxIterReached;
             cout << "EXIT: Maximum iterations reached\n";
@@ -153,7 +129,6 @@ void ILQRSolver<T, M, N>::GenerateTrajectory(ILQRSolverState<T, M, N> *ilqr_stat
     } // end top-level for-loop
 
     Problem().GetCostUnionPtr()->EvaluateConstraints(ilqr_state->x_seq(), ilqr_state->u_seq());
-    double max_violation = Problem().GetCostUnionPtr()->GetMaxViolation();
 //    cout << "Solver Status : ";
     status_ = ilqr_state->status_;
 //    ShowSolverState();
@@ -189,16 +164,12 @@ template<typename T, unsigned int M, unsigned int N>
 bool ILQRSolver<T, M, N>::ForwardProcess(const States &x_old, const Controls &u_old, double *new_cost, double *dcost,
                                          double *expected, double *ratio, ILQRSolverState<T, M, N> *ilqr_state) const {
     bool is_fwd_pass_done = false;
-//    StopWatch timer;
-//    timer.start();
     for (const auto &alpha : alpha_vec_) {
         Controls u_plu_seq_feedforward = ilqr_state->u_seq_;
         for (size_t j = 0; j < ilqr_state->u_seq_.size(); j++) {
             u_plu_seq_feedforward[j] += ilqr_state->k_[j] * alpha;
         }
 
-//        StopWatch ftimer;
-//        ftimer.start();
         *new_cost = RollOut(ilqr_state->x0_, u_plu_seq_feedforward, ilqr_state);
 //        double f_t = ftimer.elapsed_microseconds();
 //        cout << "roll out : " << f_t << "ms\n";
@@ -210,7 +181,6 @@ bool ILQRSolver<T, M, N>::ForwardProcess(const States &x_old, const Controls &u_
             *ratio = *dcost / *expected;
         } else {
             *ratio = sgn(*dcost);
-            //      NLOGW("Warning: non-positive expected reduction");
             ilqr_state->status_ = SolverStatus::CostIncrease;
             cout << "Warning: non-positive expected reduction\n";
         }
@@ -268,7 +238,6 @@ double ILQRSolver<T, M, N>::RollOut(const State &x0, const Controls &u, ILQRSolv
     }
 
     ilqr_state->x_seq_ = x_new;
-//    total_cost += problem().final_state_value(ilqr_state->x_seq_[step_nums]);
     return total_cost;
 }
 
@@ -292,21 +261,12 @@ void ILQRSolver<T, M, N>::BackwardProcess(ILQRSolverState<T, M, N> *ilqr_state) 
         return;
     }
 
-    // cost-to-go at the end
-//    ilqr_state->Vx_[step_nums] = ilqr_state->lx_[step_nums];
-//    ilqr_state->Vxx_[step_nums] = ilqr_state->lxx_[step_nums];
-
-//    StopWatch update_derivative;
-//    uint64_t total_update_derivative = 0.0;
-//    uint64_t total_calc_V = 0.0;
-
     while (true) {
         bool is_cost_psd = true;
         ilqr_state->dV_.setZero();
         int max_reg_count = 0;
         for (int i = static_cast<int>(step_nums - 1); i >= 0; i--) {
             // backward from the end
-//            update_derivative.start();
             ilqr_state->Qx_ = ilqr_state->lx_[i] + (ilqr_state->fx_[i].transpose() *
                                                     ilqr_state->Vx_[i + 1]) + ilqr_state->cx_[i];
             ilqr_state->Qu_ = ilqr_state->lu_[i] + (ilqr_state->fu_[i].transpose() *
@@ -468,74 +428,6 @@ void ILQRSolver<T, M, N>::CalcKinematicsDerivatives(const States &x, const Contr
                 Problem().GetModel()->JacobianU(x[t], u[t], step_sizes_[t]);
     }
 }
-
-//template<typename T, unsigned M, unsigned N>
-//bool ILQRSolver<T, M, N>::IsTerminated() {
-//
-//}
-
-//template<typename T, unsigned int M, unsigned int N>
-//void ILQRSolver<T, M, N>::CalcCostDerivatives(const States &x, const Controls &u, VecXs *c_x, VecUs *c_u) const {
-//    const uint32_t step_nums = step_sizes().size();
-//    for (uint32_t t = 0; t < step_nums + 1; t++) {
-////        Problem().GetCostUnionPtr()->CalcCostGradient(t, x[t], u[t], (*c_x)[t], (*c_u)[t]);
-//        if (t < step_nums) {
-//            problem().get_cost_union()->gradient_lx(t, x[t], u[t], (*c_x)[t]);
-//            problem().get_cost_union()->gradient_lu(t, x[t], u[t], (*c_u)[t]);
-//        } else {
-//            problem().get_cost_union()->gradient(x[t], (*c_x)[t]);
-//            (*c_u)[t].setZero();
-//        }
-//    }
-//}
-//
-//template<typename T, unsigned int M, unsigned int N>
-//void ILQRSolver<T, M, N>::CalcCost2ndDerivatives(const States &x, const Controls &u, MatrixCXXs *c_xx, MatrixCXUs *c_xu,
-//                                                 MatrixCUUs *c_uu) const {
-//    const uint32_t step_nums = step_sizes().size();
-//    calculate_cxx(x, u, c_xx, 0, step_nums + 1);
-//    calculate_cxu(x, u, c_xu, 0, step_nums + 1);
-//    calculate_cuu(x, u, c_uu, 0, step_nums + 1);
-//}
-//
-//template<typename T, unsigned int M, unsigned int N>
-//void ILQRSolver<T, M, N>::calculate_cxx(const States &x, const Controls &u, MatrixCXXs *c_xx, const uint32_t start_step,
-//                               const uint32_t end_step) const {
-//    const uint32_t step_nums = step_sizes().size();
-//    for (uint32_t i = start_step; i < end_step; i++) {
-//        if (i < step_nums) {
-//            problem().get_cost_union()->hessian_lxx(i, x[i], u[i], (*c_xx)[i]);
-//        } else {
-//            problem().get_cost_union()->hessian(x[i], (*c_xx)[i]);
-//        }
-//    }
-//}
-//
-//template<typename T, unsigned int M, unsigned int N>
-//void ILQRSolver<T, M, N>::calculate_cuu(const States &x, const Controls &u, MatrixCUUs *c_uu, const uint32_t start_step,
-//                               const uint32_t end_step) const {
-//    const uint32_t step_nums = step_sizes().size();
-//    for (uint32_t i = start_step; i < end_step; i++) {
-//        if (i < step_nums) {
-//            problem().get_cost_union()->hessian_luu(i, x[i], u[i], (*c_uu)[i]);
-//        } else {
-//            (*c_uu)[i].setZero();
-//        }
-//    }
-//}
-//
-//template<typename T, unsigned int M, unsigned int N>
-//void ILQRSolver<T, M, N>::calculate_cxu(const States &x, const Controls &u, MatrixCXUs *c_xu, const uint32_t start_step,
-//                               const uint32_t end_step) const {
-//    const uint32_t step_nums = step_sizes().size();
-//    for (uint32_t i = start_step; i < end_step; i++) {
-//        if (i < step_nums) {
-//            problem().get_cost_union()->hessian_lxu(i, x[i], u[i], (*c_xu)[i]);
-//        } else {
-//            (*c_xu)[i].setZero();
-//        }
-//    }
-//}
 
 template<typename T, unsigned int M, unsigned int N>
 const int ILQRSolver<T, M, N>::kMaxIter_ = 20;
