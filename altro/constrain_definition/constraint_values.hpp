@@ -23,6 +23,7 @@ public:
         penalty_.setZero(horizon_);
         cons_val_mat_.setZero(horizon_);
         ctg_val_mat_.setZero(horizon_);
+        violations_.setZero(horizon_);
     };
 
     ~ConstraintValue() = default;
@@ -57,6 +58,8 @@ public:
 
     double GetMaxPenalty() const {return penalty_.template lpNorm<Eigen::Infinity>();}
 
+    double GetMaxViolation() const {return violations_.template lpNorm<Eigen::Infinity>();}
+
     void LoadConstraint(ConstraintPtr<T, M, N, ConsType> && cons) {
         cons_ptr_.swap(cons);
     };
@@ -73,6 +76,7 @@ public:
 //        cons_ptr_->GetConstraintType();
         bool success = cons_ptr_->Evaluate(step, x, u, cons_val_);
         cons_val_mat_(step) = cons_val_;
+        violations_(step) = cons_val_ < 0.0 ? 0.0 : cons_val_;
         if (success) {
             ctg_val_ = (lambda_(step) + 0.5 * cons_val_ * penalty_(step)) * cons_val_;
         }
@@ -121,7 +125,7 @@ private:
     VecX grad_x_;
     VecU grad_u_;
     ConstraintPtr<T, M, N, ConsType> cons_ptr_;
-    vector<double> violations_;
+    Eigen::Matrix<T, dim, 1> violations_;
 };
 
 template<typename T, unsigned M, unsigned N, class ConsType>

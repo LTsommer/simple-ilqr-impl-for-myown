@@ -147,6 +147,11 @@ void ALILQRSolver<T, M, N>::GenerateTrajectory(ILQRSolverState<T, M, N> *ilqr_st
             break;
         }
 
+        if (max_violation_ < kViolationTol_) {
+            cout << "less than max allowed constraint violation\n";
+            break;
+        }
+
         if (iter == kMaxIter_) {
             if (ilqr_state->status_ != SolverStatus::OCPSolved)
                 ilqr_state->status_ = SolverStatus::MaxIterReached;
@@ -195,8 +200,7 @@ void ALILQRSolver<T, M, N>::UpdateConvergenceState() {
         max_penalty_ = std::max(max_penalty_, cons_ptr->GetMaxPenalty());
     }
 
-    max_violation_ = std::max(max_violation_, Problem().GetCostUnionPtr()->GetMaxViolation());
-//    cout << "max penalty : " << max_penalty_ << "\n";
+    max_violation_ = Problem().GetCostUnionPtr()->GetMaxViolation();
 }
 
 template<typename T, unsigned int M, unsigned int N>
@@ -491,7 +495,7 @@ void ALILQRSolver<T, M, N>::CalcKinematicsDerivatives(const States &x, const Con
 }
 
 template<typename T, unsigned int M, unsigned int N>
-const int ALILQRSolver<T, M, N>::kMaxIter_ = 50;
+const int ALILQRSolver<T, M, N>::kMaxIter_ = 20;
 
 template<typename T, unsigned int M, unsigned int N>
 const double ALILQRSolver<T, M, N>::kTolFun_ = 1e-6;
@@ -518,7 +522,7 @@ template<typename T, unsigned M, unsigned N>
 const double ALILQRSolver<T, M, N>::kRationMax_ = 10.0;
 
 template<typename T, unsigned M, unsigned N>
-const double ALILQRSolver<T, M, N>::kViolationTol_ = 1e-2;
+const double ALILQRSolver<T, M, N>::kViolationTol_ = 1e-6;
 
 template<typename T, unsigned M, unsigned N>
 const int ALILQRSolver<T, M, N>::kMaxRegCount_ = 20;

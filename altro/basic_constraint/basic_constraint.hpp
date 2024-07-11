@@ -281,7 +281,6 @@ private:
     const double w_plb_;       // path left bound weight
     const double w_prb_;       // path right bound weight
     const uint32_t steps_num_; // total number of steps
-//    const OneSideQuadraticCost one_side_quadratic_cost_;
     const OneSideCost one_side_cost_;
     const LateralOffsetConstraint<T, M, N> line_segment_constraint_lb_;
     const LateralOffsetConstraint<T, M, N> line_segment_constraint_rb_;
@@ -402,8 +401,8 @@ public:
         control_limit_constraint_lb_.Evaluate(step, x, u, g_lb);
         control_limit_constraint_ub_.Evaluate(step, x, u, g_ub);
 
-        double f_lb = one_side_cost_.Evaluate(g_lb);
-        double f_ub = one_side_cost_.Evaluate(g_ub);
+        double f_lb = equal_cost_.Evaluate(g_lb);
+        double f_ub = equal_cost_.Evaluate(g_ub);
 
         cost_val = w_clb_ * f_lb + w_cub_ * f_ub;
         return true;
@@ -430,8 +429,8 @@ public:
 
         double grad_f_lb{0.0};
         double grad_f_ub{0.0};
-        one_side_cost_.Gradient(g_lb, grad_f_lb);
-        one_side_cost_.Gradient(g_ub, grad_f_ub);
+        equal_cost_.Gradient(g_lb, grad_f_lb);
+        equal_cost_.Gradient(g_ub, grad_f_ub);
 
         lx = w_clb_ * grad_f_lb * grad_gx_lb + w_cub_ * grad_f_ub * grad_gx_ub;
         lu = w_clb_ * grad_f_lb * grad_gu_lb + w_cub_ * grad_f_ub * grad_gu_ub;
@@ -461,8 +460,8 @@ public:
 
         double grad_f_lb{0.0};
         double grad_f_ub{0.0};
-        one_side_cost_.Gradient(g_lb, grad_f_lb);
-        one_side_cost_.Gradient(g_ub, grad_f_ub);
+        equal_cost_.Gradient(g_lb, grad_f_lb);
+        equal_cost_.Gradient(g_ub, grad_f_ub);
 
         MatrixLXX hess_gxx_lb, hess_gxx_ub;
         MatrixLUU hess_guu_lb, hess_guu_ub;
@@ -472,8 +471,8 @@ public:
 
         double hess_f_lb{0.0};
         double hess_f_ub{0.0};
-        one_side_cost_.Hessian(g_lb, hess_f_lb);
-        one_side_cost_.Hessian(g_ub, hess_f_ub);
+        equal_cost_.Hessian(g_lb, hess_f_lb);
+        equal_cost_.Hessian(g_ub, hess_f_ub);
 
         lxx = w_clb_ * (hess_f_lb * grad_gx_lb * grad_gx_lb.transpose() +
                         grad_f_lb * hess_gxx_lb) +
@@ -495,7 +494,7 @@ private:
     const double w_clb_;       // control lower bound weight
     const double w_cub_;       // control upper bound weight
 //    const OneSideQuadraticCost one_side_quadratic_cost_;
-    const OneSideCost one_side_cost_;
+    const EqualCost equal_cost_;
     const ControlLimitConstraint<T, M, N> control_limit_constraint_lb_;
     const ControlLimitConstraint<T, M, N> control_limit_constraint_ub_;
 };
@@ -521,7 +520,7 @@ public:
         if (is_lb) {
             a_ = -1;
             for (size_t t = 0; t < num_steps; t++) {
-                b_.emplace_back(yaw[t] - config.yaw_diff_max);
+                b_.emplace_back(yaw[t] + config.yaw_diff_min);
             }
         } else {
             a_ = 1;
@@ -613,8 +612,8 @@ public:
         heading_track_lb_.Evaluate(step, x, u, g_lb);
         heading_track_ub_.Evaluate(step, x, u, g_ub);
 
-        double f_lb = one_side_cost_.Evaluate(g_lb);
-        double f_ub = one_side_cost_.Evaluate(g_ub);
+        double f_lb = equal_cost_.Evaluate(g_lb);
+        double f_ub = equal_cost_.Evaluate(g_ub);
 
         cost_val = w_clb_ * f_lb + w_cub_ * f_ub;
         return true;
@@ -639,8 +638,8 @@ public:
 
         double grad_f_lb{0.0};
         double grad_f_ub{0.0};
-        one_side_cost_.Gradient(g_lb, grad_f_lb);
-        one_side_cost_.Gradient(g_ub, grad_f_ub);
+        equal_cost_.Gradient(g_lb, grad_f_lb);
+        equal_cost_.Gradient(g_ub, grad_f_ub);
 
         lx = w_clb_ * grad_f_lb * grad_gx_lb + w_cub_ * grad_f_ub * grad_gx_ub;
         lu = w_clb_ * grad_f_lb * grad_gu_lb + w_cub_ * grad_f_ub * grad_gu_ub;
@@ -670,8 +669,8 @@ public:
 
         double grad_f_lb{0.0};
         double grad_f_ub{0.0};
-        one_side_cost_.Gradient(g_lb, grad_f_lb);
-        one_side_cost_.Gradient(g_ub, grad_f_ub);
+        equal_cost_.Gradient(g_lb, grad_f_lb);
+        equal_cost_.Gradient(g_ub, grad_f_ub);
 
         MatrixLXX hess_gxx_lb, hess_gxx_ub;
         MatrixLUU hess_guu_lb, hess_guu_ub;
@@ -681,8 +680,8 @@ public:
 
         double hess_f_lb{0.0};
         double hess_f_ub{0.0};
-        one_side_cost_.Hessian(g_lb, hess_f_lb);
-        one_side_cost_.Hessian(g_ub, hess_f_ub);
+        equal_cost_.Hessian(g_lb, hess_f_lb);
+        equal_cost_.Hessian(g_ub, hess_f_ub);
 
         lxx = w_clb_ * (hess_f_lb * grad_gx_lb * grad_gx_lb.transpose() +
                 grad_f_lb * hess_gxx_lb) +
@@ -706,7 +705,7 @@ private:
     int step_num_;
     HeadingTrackConstraint<T, M, N> heading_track_lb_;
     HeadingTrackConstraint<T, M, N> heading_track_ub_;
-    OneSideCost one_side_cost_;
+    EqualCost equal_cost_;
 };
 
 /*
@@ -819,8 +818,8 @@ public:
         kappa_limit_constraint_lb_.Evaluate(step, x, u, g_lb);
         kappa_limit_constraint_ub_.Evaluate(step, x, u, g_ub);
 
-        double f_lb = one_side_cost_.Evaluate(g_lb);
-        double f_ub = one_side_cost_.Evaluate(g_ub);
+        double f_lb = equal_cost_.Evaluate(g_lb);
+        double f_ub = equal_cost_.Evaluate(g_ub);
 
         cost_val = w_clb_ * f_lb + w_cub_ * f_ub;
         return true;
@@ -846,8 +845,8 @@ public:
 
         double grad_f_lb{0.0};
         double grad_f_ub{0.0};
-        one_side_cost_.Gradient(g_lb, grad_f_lb);
-        one_side_cost_.Gradient(g_ub, grad_f_ub);
+        equal_cost_.Gradient(g_lb, grad_f_lb);
+        equal_cost_.Gradient(g_ub, grad_f_ub);
 
         lx = w_clb_ * grad_f_lb * grad_gx_lb + w_cub_ * grad_f_ub * grad_gx_ub;
         lu = w_clb_ * grad_f_lb * grad_gu_lb + w_cub_ * grad_f_ub * grad_gu_ub;
@@ -876,8 +875,8 @@ public:
 
         double grad_f_lb{0.0};
         double grad_f_ub{0.0};
-        one_side_cost_.Gradient(g_lb, grad_f_lb);
-        one_side_cost_.Gradient(g_ub, grad_f_ub);
+        equal_cost_.Gradient(g_lb, grad_f_lb);
+        equal_cost_.Gradient(g_ub, grad_f_ub);
 
         MatrixLXX hess_gxx_lb, hess_gxx_ub;
         MatrixLUU hess_guu_lb, hess_guu_ub;
@@ -887,8 +886,8 @@ public:
 
         double hess_f_lb{0.0};
         double hess_f_ub{0.0};
-        one_side_cost_.Hessian(g_lb, hess_f_lb);
-        one_side_cost_.Hessian(g_ub, hess_f_ub);
+        equal_cost_.Hessian(g_lb, hess_f_lb);
+        equal_cost_.Hessian(g_ub, hess_f_ub);
 
         lxx = w_clb_ * (hess_f_lb * grad_gx_lb * grad_gx_lb.transpose() +
                         grad_f_lb * hess_gxx_lb) +
@@ -909,7 +908,7 @@ public:
 private:
     const double w_clb_;       // control lower bound weight
     const double w_cub_;       // control upper bound weight
-    const OneSideCost one_side_cost_;
+    const EqualCost equal_cost_;
     const KappaLimitsConstraint<T, M, N> kappa_limit_constraint_lb_;
     const KappaLimitsConstraint<T, M, N> kappa_limit_constraint_ub_;
     int steps_num_;

@@ -35,6 +35,8 @@ public:
         FrenetCoordinateSystemParameters fcs_params;
         fcs_params.Init();
         fcs_.reset(new FrenetCoordinateSystem(config.ref_x, config.ref_y, fcs_params));
+        num_of_eq_cons_ = 0;
+        num_of_ineq_cons_ = 0;
     };
 
     CostUnion &operator=(const CostUnion&) = delete;
@@ -69,7 +71,23 @@ public:
 
     void CalcTerminalCostToGo(const State &x);
 
-    double GetMaxViolation() const {return max_violation_;};
+    double GetMaxViolation() {
+        int num_of_cons = GetNumOfConstraints();
+        violations_.setZero(num_of_cons);
+        for (int i = 0; i < num_of_cons; ++i) {
+            if (i < num_of_eq_cons_) {
+                violations_(i) = eqs_[i]->GetMaxViolation();
+                cout << eqs_[i]->GetName() << ": " << violations_(i) << "\n";
+            }
+            else {
+                int j = i - num_of_eq_cons_;
+                violations_(i) = ineqs_[j]->GetMaxViolation();
+                cout << ineqs_[j]->GetName() << ": " << violations_(i) << "\n";
+            }
+        }
+        cout << "\n";
+        return violations_.template lpNorm<Eigen::Infinity>();
+    };
 
     void EvaluateConstraints(const States &x, const Controls &u);
 
@@ -87,13 +105,17 @@ public:
         type_names_[constraint_value->GetTypeIndex()] = constraint_value->GetName();
         std::cout << constraint_value->GetName() << " is loaded\n";
         eqs_.emplace_back(std::move(constraint_value));
+        ++num_of_eq_cons_;
     }
 
     void AddIneqConstraint(ConstraintValuePtr<T, M, N, Inequality> &&constraint_value) {
         type_names_[constraint_value->GetTypeIndex()] = constraint_value->GetName();
         std::cout << constraint_value->GetName() << " is loaded\n";
         ineqs_.emplace_back(std::move(constraint_value));
+        ++num_of_ineq_cons_;
     }
+
+    int GetNumOfConstraints() const { return num_of_eq_cons_ + num_of_ineq_cons_;}
 
     TypeNames GetTypeNames() const {return type_names_;}
 
@@ -187,8 +209,7 @@ private:
     CostFuncs cost_terms_;
     ConstraintValues<Equality> eqs_;
     ConstraintValues<Inequality> ineqs_;
-    VectorNd<dim> eqc_violations_;
-    VectorNd<dim> ineqc_violations_;
+    VectorNd<dim> violations_;
     VecX pN;
     MatrixLXX PN;
     int horizon_;
@@ -196,6 +217,8 @@ private:
     TypeNames type_names_;
     vector<double> max_penalty_;
     std::unique_ptr<FrenetCoordinateSystem> fcs_;
+    int num_of_eq_cons_;
+    int num_of_ineq_cons_;
 };
 
 template<typename T, unsigned M, unsigned N>

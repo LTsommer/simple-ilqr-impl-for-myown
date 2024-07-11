@@ -99,8 +99,8 @@ int main() {
         double s_back = std::min(frenet_pt.x() + buffer_dis, fcs->GetSlength());
         vector<Vec2d> bound_points;
         if (i >= 5 and i <= 8) {
-            Vec2d left_lane_boundary_1(s_front, lane_width - 1.2);
-            Vec2d left_lane_boundary_2(s_back, lane_width - 1.2);
+            Vec2d left_lane_boundary_1(s_front, lane_width - 1.0);
+            Vec2d left_lane_boundary_2(s_back, lane_width - 1.0);
             Vec2d right_lane_boundary_1(s_front, -lane_width);
             Vec2d right_lane_boundary_2(s_back, -lane_width);
             left_safe_dist.emplace_back(half_veh_width + max_safe_buffer);
@@ -256,10 +256,10 @@ int main() {
     config.p_bound = p_bounds;
     config.left_safe_dist = left_safe_dist;
     config.right_safe_dist = right_safe_dist;
-    config.safe_dist = safe_dist;
     config.ref_x = rx;
     config.ref_y = ry;
     config.yaw_diff_max = 0.1;
+    config.yaw_diff_min = -0.1;
     config.kappa_max = 0.15;
     config.kappa_min = -0.15;
     config.type_names = type_names;
@@ -305,7 +305,7 @@ int main() {
             curve_cons(new KappaConstraint<double, 5, 1>(config));
     curve_cons_val->LoadConstraint(std::move(curve_cons));
     curve_cons_val->SetDual(10);
-    curve_cons_val->SetPenalty(100);
+    curve_cons_val->SetPenalty(10);
     ocp_interface->AddIneqConstraint(std::move(curve_cons_val));
 
     ocp_interface->SetModel(std::make_unique<SmoothKappaModel>());
@@ -327,7 +327,7 @@ int main() {
 //    solver->Solve(x0, u0, x_res_seq, u_res_seq);
 //
     std::unique_ptr<ALILQRSolver<double, 5, 1>> altro_solver(new ALILQRSolver(std::move(ocp_interface), ds));
-    altro_solver->SetUpdateConfig(true);
+//    altro_solver->SetUpdateConfig(true);
     altro_solver->Solve(x0, u0, x_res_seq, u_res_seq);
     vector<double> ilqr_x, ilqr_y, ilqr_h, ilqr_k, ilqr_dk, ilqr_ddk;
     vector<Box2d> vehicles;

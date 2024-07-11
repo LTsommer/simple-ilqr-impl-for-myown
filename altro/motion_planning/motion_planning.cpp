@@ -354,10 +354,10 @@ int main() {
     config.safe_dist = safe_dist;
     config.buffer_dis = buffer_dis;
     config.lane_width = lane_width;
-    config.yaw_diff_max = 0.1;
-    config.yaw_diff_min = -0.1;
-    config.kappa_max = 0.15;
-    config.kappa_min = -0.15;
+    config.yaw_diff_max = 0.05;
+    config.yaw_diff_min = -0.05;
+    config.kappa_max = 0.10;
+    config.kappa_min = -0.10;
     config.acc_max = 4.0;
     config.acc_min = -2.0;
     config.lat_jerk_min = -5.0;
@@ -437,7 +437,7 @@ int main() {
     ConstraintValuePtr<double, M, N, Inequality>
             safe_cons_val(new ConstraintValue<double, M, N, Inequality>(horizon));
     ConstraintPtr<double, M, N, Inequality>
-            safe_cons(new SafeConstraint<double, M, N>(config));
+            safe_cons(new SafeDistanceToBoundaryConstraint(config));
     safe_cons_val->LoadConstraint(std::move(safe_cons));
     safe_cons_val->SetDual(10.0);
     safe_cons_val->SetPenalty(20.0);
