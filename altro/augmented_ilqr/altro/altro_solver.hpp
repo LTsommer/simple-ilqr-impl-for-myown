@@ -8,6 +8,8 @@
 #include "alilqr_solver.h"
 #include "cost_calc.h"
 #include "../clock.hpp"
+#include "qdldl_interface.h"
+#include <Eigen/Dense>
 #include <iostream>
 
 using std::cout;
@@ -42,12 +44,14 @@ public:
     using CostUnionType = CostUnion<T, M, N>;
     template<class ConsType>
     using ConstraintValues = typename CostUnionType::template ConstraintValues<ConsType>;
-    constexpr static double kDefaultConstraintEpsilon = 5.0;
+    constexpr static double kDefaultConstraintEpsilon = 1.0e-6;
     constexpr static double kTol = 1.0e-6;
     constexpr static double kConvRateTol = 1.1;
     constexpr static int kMaxLineSearchIter = 20;
     constexpr static int kMaxInnerIter = 10;
     constexpr static int kMaxOuterIter = 10;
+    constexpr static double kZeroTol = 1.0e-6;
+    constexpr static double kPrimalFactor = 1.0e-8;
 public:
     OCP_VARIABLES(T, M, N)
     explicit ALTROSolver(std::unique_ptr<OCPInterface<T, M, N>> &&ocp_interface,
@@ -162,7 +166,68 @@ private:
         }
         t_cost_hessian_ << lxx,              lxu,
                            lxu.transpose(),  luu;
+        MatrixHZ primal_regularization;
+        primal_regularization.setIdentity();
+        t_cost_hessian_ += primal_regularization * kPrimalFactor;
 //        cout << "t_cost_hessian" << t_cost_hessian_ << endl;
+    }
+
+    Eigen::MatrixXd GetKKTMatrix(const MatrixXd &D) {
+        const int cj_rows = D.rows();
+//        Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> zero_mat;
+        Eigen::MatrixXd zero_mat(cj_rows, cj_rows);
+        zero_mat.setZero();
+//        Eigen::MatrixXd<T, M + N + cj_rows, M + N + cj_rows> KKT;
+        Eigen::MatrixXd KKT(M + N + cj_rows, M + N + cj_rows);
+        KKT.setZero();
+        KKT << t_cost_hessian_, D.transpose(),
+               D,               zero_mat;
+        return KKT;
+    }
+
+    void QDLDLSolver(const MatrixXd &KKT, const MatrixXd &d, State &x, Control &u) {
+        const QDLDL_int An = KKT.rows();
+        vector<long long> Ap{0};
+        vector<long long> Ai;
+        vector<double> Ax;
+        vector<double> b(An, 0.0);
+        cout << KKT << endl << endl;
+        int ap = 0;
+        for (int i = 0; i < KKT.cols(); ++i) {
+            int ai = 0;
+            for (int j = 0; j < KKT.rows(); ++j) {
+                if (std::fabs(KKT(j, i)) > kZeroTol) {
+                    ++ai;
+                    Ai.emplace_back(j);
+                    Ax.emplace_back(KKT(j, i));
+                }
+            }
+            ap += ai;
+            Ap.emplace_back(ap);
+        }
+        for (int i = 0; i < d.rows(); ++i) {
+            b[M + N + i] = d(i);
+        }
+
+        cout << "An : " << An << endl;
+        cout << "Ap size : " << Ap.size() << endl;
+        std::for_each(Ap.begin(), Ap.end(), [](const auto &num){cout << num << " ";});
+        cout << endl;
+        cout << "Ai size : " << Ai.size() << endl;
+        std::for_each(Ai.begin(), Ai.end(), [](const auto &num){cout << num << " ";});
+        cout << endl;
+        cout << "Ax size : " << Ax.size() << endl;
+        std::for_each(Ax.begin(), Ax.end(), [](const auto &num){cout << num << " ";});
+        cout << endl;
+        cout << "b size : " << b.size() << endl;
+        std::for_each(b.begin(), b.end(), [](const auto &num){cout << num << " ";});
+        cout << endl;
+        vector<double> rst = QDLDLSolve(An, Ap.data(), Ai.data(), Ax.data(), b.data());
+        Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, 1>> z(rst.data(), M + N);
+        cout << "qdldl end\n";
+        x = z.head(M);
+        u = z.tail(N);
+        cout << "qdldl solve successfully\n";
     }
 
     /* in this ocp, inequality constraints are defined as g(x) < 0
@@ -205,7 +270,7 @@ private:
             bool success = cons_ptr->Evaluate(step, x, u);
             if (success) {
                 double cons_val = cons_ptr->ConsVal();
-                if (cons_val < kDefaultConstraintEpsilon) {
+                if (cons_val > kDefaultConstraintEpsilon) {
                     violations.emplace_back(cons_val);
                     cons_ptr->Gradient(step, x, u);
                     VecX cur_lx = cons_ptr->GradientX();
@@ -268,126 +333,173 @@ private:
     }
 
     void Projection(const int step, State x, Control u,
-                    State &polished_x, Control &polished_u) {
+                    State &altro_x, Control &altro_u) {
         GetCostHessianAt(step, x, u);
-        Eigen::LLT<MatrixXd> llt(t_cost_hessian_);
-        MatrixXd H_inv;
-        if (llt.info() == Eigen::Success) {
-            H_inv = t_cost_hessian_.inverse();
-        }
-        else {
-//            H_inv = t_cost_hessian_.completeOrthogonalDecomposition().pseudoInverse();
-            H_inv = PseudoInverse(t_cost_hessian_);
-        }
-        if (!H_inv.allFinite() or H_inv.array().isNaN().any() or H_inv.sum() < kTol) {
-//            cout << "fail to calc Inverse\n";
+//        Eigen::LLT<MatrixXd> llt(t_cost_hessian_);
+//        if (llt.info() != Eigen::Success) {
+//            cout << "fail to QR decomposition\n";
+//            return;
+//        }
+        MatrixXd D;
+        MatrixXd d;
+        JacSize linearized_active_cons =
+                GetActiveConstraintsGradientAt(step, x, u, D, d);
+//        cout << D << endl << endl;
+        if (linearized_active_cons == JacSize::None)
             return;
+        MatrixXd KKT = GetKKTMatrix(D);
+        Eigen::VectorXd b(KKT.rows());
+        for (int i = 0; i < d.rows(); ++i) {
+            b(M + N + i) = -d(i);
         }
-        int loop = 0;
-        double v = std::numeric_limits<double>::epsilon();
-        while (v > kTol) {
-            MatrixXd D;
-            MatrixXd d;
-            JacSize linearized_active_cons = GetActiveConstraintsGradientAt(step, x, u, D, d);
-//            cout << "H_inv : \n" << H_inv << endl;
+        Eigen::VectorXd z = KKT.lu().solve(b).head(M + N);
+        altro_x = x + z.head(M);
+        altro_u = u + z.tail(N);
+//        Eigen::LLT<MatrixXd> llt(KKT);
+//        MatrixXd KKT_inv;
+//        if (llt.info() == Eigen::Success) {
+//            KKT_inv = KKT.inverse();
+//        }
+//        else {
+//            KKT_inv = PseudoInverse(KKT);
+//        }
+//        if (!KKT_inv.allFinite() or KKT_inv.array().isNaN().any() or KKT_inv.sum() < kTol) {
+//            cout << "fail to calc Inverse\n";
+//            return;
+//        }
+//
+//        Eigen::Matrix<T, Eigen::Dynamic, 1> b;
+//        b.setZero(KKT.rows());
+//        for (int i = 0; i < d.rows(); ++i) {
+//            b(M + N + i) = d(i);
+//        }
+//        MatrixXd delta_Z = KKT_inv * b;
+//        altro_x = x + delta_Z.topRows(M);
+//        altro_u = u + delta_Z.bottomRows(N);
+//        QDLDLSolver(KKT, d, altro_x, altro_u);
+    }
 
-            if (linearized_active_cons == JacSize::None) {
-//                cout << "No active constraints at step " << step << " found\n";
-                return;
-            }
-            MatrixXd mat = D * H_inv * D.transpose();
-            if (mat.sum() < kTol)
-                return;
-
-            MatrixXd S;
-            S.setZero();
-            MatrixXd S_inv;
-            double S_, S_inv_;
-            if (linearized_active_cons == JacSize::Jacobian) {
-                S = mat.llt().matrixL();
-                Eigen::LLT<MatrixXd> llt(S);
-                if (llt.info() == Eigen::Success) {
-                    S_inv = S.inverse();
-                }
-                else {
-                    S_inv = PseudoInverse(S);
-                }
-
-                if (!S_inv.allFinite() or S_inv.array().isNaN().any()) {
-//                        cout << "Failed to calc inverse of Matrix S\n";
-                    return;
-                }
-            }
-            else if (linearized_active_cons == JacSize::Gradient){
-                S_ = std::sqrt(mat(0));
-                S_inv_ = 1.0 / S_;
-//                cout << "S_ = " << S_ << endl;
-            }
-
-            v = d.lpNorm<Eigen::Infinity>();
-            if (v < kTol) {
-                break;
-            }
-
-            int inner_loop = 0;
-
-            MatrixXd delta_z;
-            double r = std::numeric_limits<double>::infinity();
-            while (v > kTol and r > kConvRateTol) {
-                // line search
-                double alpha = 1.0;
-                double gamma = 0.5;
-                if (linearized_active_cons == JacSize::Jacobian)
-                    delta_z = H_inv * D.transpose() * (S_inv * S_inv.transpose() * d);
-                else if (linearized_active_cons == JacSize::Gradient)
-                    delta_z = H_inv * D.transpose() * (S_inv_ * S_inv_ * d);
-//                cout << "delta_z: \n" << delta_z << endl;
-                double v0;
-                State x_n;
-                Control u_n;
-                bool flag = false;
-                for (int i = 0; i < kMaxLineSearchIter; ++i) {
-//                    cout << "line search " << i << endl;
-                    x_n = x + alpha * delta_z.topRows(M);
-                    u_n = u + alpha * delta_z.bottomRows(N);
-                    MatrixXd d_;
-                    UpdateConstraintValues(step, x_n, u_n, d_);
-                    v0 = d_.lpNorm<Eigen::Infinity>();
-//                    cout << "v0=" << v0 << " v=" << v << endl;
-                    if (v0 < v) {
-                        cout << "line search successfully\n";
-                        x = x_n;
-                        u = u_n;
-                        flag = true;
-                        break;
-                    }
-                    alpha *= gamma;
-                }
-                // end line search
-                r = std::log(v0) / std::log(v);
-                if (flag) {
-                    v = v0;
-                    break;
-                }
-//                if (v < kTol or r < kConvRateTol) {
-//                    cout << "line search successfully\n";
-////                    cout << "r=" << r << endl;
-////                    cout << "v=" << v << endl;
-//                    x = x_n;
-//                    u = u_n;
+//    void Projection(const int step, State x, Control u,
+//                    State &polished_x, Control &polished_u) {
+//        GetCostHessianAt(step, x, u);
+//        Eigen::LLT<MatrixXd> llt(t_cost_hessian_);
+//        MatrixXd H_inv;
+//        if (llt.info() == Eigen::Success) {
+//            H_inv = t_cost_hessian_.inverse();
+//        }
+//        else {
+////            H_inv = t_cost_hessian_.completeOrthogonalDecomposition().pseudoInverse();
+//            H_inv = PseudoInverse(t_cost_hessian_);
+//        }
+//        if (!H_inv.allFinite() or H_inv.array().isNaN().any() or H_inv.sum() < kTol) {
+////            cout << "fail to calc Inverse\n";
+//            return;
+//        }
+//        int loop = 0;
+//        double v = std::numeric_limits<double>::epsilon();
+//        while (v > kTol) {
+//            MatrixXd D;
+//            MatrixXd d;
+//            JacSize linearized_active_cons = GetActiveConstraintsGradientAt(step, x, u, D, d);
+////            cout << "H_inv : \n" << H_inv << endl;
+//
+//            if (linearized_active_cons == JacSize::None) {
+////                cout << "No active constraints at step " << step << " found\n";
+//                return;
+//            }
+//            MatrixXd mat = D * H_inv * D.transpose();
+//            if (mat.sum() < kTol)
+//                return;
+//
+//            MatrixXd S;
+//            S.setZero();
+//            MatrixXd S_inv;
+//            double S_, S_inv_;
+//            if (linearized_active_cons == JacSize::Jacobian) {
+//                S = mat.llt().matrixL();
+//                Eigen::LLT<MatrixXd> llt(S);
+//                if (llt.info() == Eigen::Success) {
+//                    S_inv = S.inverse();
+//                }
+//                else {
+//                    S_inv = PseudoInverse(S);
+//                }
+//
+//                if (!S_inv.allFinite() or S_inv.array().isNaN().any()) {
+////                        cout << "Failed to calc inverse of Matrix S\n";
+//                    return;
+//                }
+//            }
+//            else if (linearized_active_cons == JacSize::Gradient){
+//                S_ = std::sqrt(mat(0));
+//                S_inv_ = 1.0 / S_;
+////                cout << "S_ = " << S_ << endl;
+//            }
+//
+//            v = d.lpNorm<Eigen::Infinity>();
+//            if (v < kTol) {
+//                break;
+//            }
+//
+//            int inner_loop = 0;
+//
+//            MatrixXd delta_z;
+//            double r = std::numeric_limits<double>::infinity();
+//            while (v > kTol and r > kConvRateTol) {
+//                // line search
+//                double alpha = 1.0;
+//                double gamma = 0.5;
+//                if (linearized_active_cons == JacSize::Jacobian)
+//                    delta_z = H_inv * D.transpose() * (S_inv * S_inv.transpose() * d);
+//                else if (linearized_active_cons == JacSize::Gradient)
+//                    delta_z = H_inv * D.transpose() * (S_inv_ * S_inv_ * d);
+////                cout << "delta_z: \n" << delta_z << endl;
+//                double v0;
+//                State x_n;
+//                Control u_n;
+//                bool flag = false;
+//                for (int i = 0; i < kMaxLineSearchIter; ++i) {
+////                    cout << "line search " << i << endl;
+//                    x_n = x + alpha * delta_z.topRows(M);
+//                    u_n = u + alpha * delta_z.bottomRows(N);
+//                    MatrixXd d_;
+//                    UpdateConstraintValues(step, x_n, u_n, d_);
+//                    v0 = d_.lpNorm<Eigen::Infinity>();
+////                    cout << "v0=" << v0 << " v=" << v << endl;
+//                    if (v0 < v) {
+//                        cout << "line search successfully\n";
+//                        x = x_n;
+//                        u = u_n;
+//                        flag = true;
+//                        break;
+//                    }
+//                    alpha *= gamma;
+//                }
+//                // end line search
+//                r = std::log(v0) / std::log(v);
+//                if (flag) {
+//                    v = v0;
 //                    break;
 //                }
-                inner_loop++;
-                if (inner_loop > kMaxInnerIter)
-                    break;
-            }
-            loop++;
-            if (loop > kMaxOuterIter)
-                break;
-        }
-        polished_x = x;
-        polished_u = u;
-    }
+////                if (v < kTol or r < kConvRateTol) {
+////                    cout << "line search successfully\n";
+//////                    cout << "r=" << r << endl;
+//////                    cout << "v=" << v << endl;
+////                    x = x_n;
+////                    u = u_n;
+////                    break;
+////                }
+//                inner_loop++;
+//                if (inner_loop > kMaxInnerIter)
+//                    break;
+//            }
+//            loop++;
+//            if (loop > kMaxOuterIter)
+//                break;
+//        }
+//        polished_x = x;
+//        polished_u = u;
+//    }
 
     const double GetMaxViolation() const {return solver_->Problem().GetCostUnionPtr()->GetMaxViolation();}
 

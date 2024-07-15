@@ -13,7 +13,7 @@
 #include "../augmented_ilqr/ocp_problem.hpp"
 #include "../augmented_ilqr/alilqr_solver.h"
 #include "../basic_constraint/basic_constraint.hpp"
-#include "../augmented_ilqr/polished_altro/altro_solver.hpp"
+#include "../augmented_ilqr/altro/altro_solver.hpp"
 #include "constrints/constraints.hpp"
 #include "../clock.hpp"
 #include "../math/box2d.h"
@@ -484,7 +484,7 @@ int main() {
     Controls u_res_seq;
 //    solver->Solve(x0, u0, x_res_seq, u_res_seq);
 //
-    std::unique_ptr<ALILQRSolver<double, M, N>> altro_solver(new ALILQRSolver(std::move(ocp_interface), dt));
+    std::unique_ptr<ALTROSolver<double, M, N>> altro_solver(new ALTROSolver(std::move(ocp_interface), dt));
     altro_solver->SetUpdateConfig(true);
     altro_solver->Solve(x0, u0, x_res_seq, u_res_seq);
     vector<double> ilqr_x, ilqr_y, ilqr_h, ilqr_k, ilqr_dk, ilqr_v, ilqr_a, ilqr_j;

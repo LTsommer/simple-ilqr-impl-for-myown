@@ -34,7 +34,6 @@ double ALILQRSolver<T, M, N>::InitTraj(const State &x_0,
 
     // Call forward_pass to get xs, us, cost
     double cost_ini = RollOut(ilqr_state->x0_, ilqr_state->u_seq_, ilqr_state);
-    //  NLOGD("Initial cost: %.3g", cost_ini);
     ilqr_state->cost_ = cost_ini;
 
     return ilqr_state->cost_;
@@ -148,7 +147,7 @@ void ALILQRSolver<T, M, N>::GenerateTrajectory(ILQRSolverState<T, M, N> *ilqr_st
         }
 
         if (max_violation_ < kViolationTol_) {
-            cout << "less than max allowed constraint violation\n";
+            cout << "SUCCESS: less than max allowed constraint violation\n";
             break;
         }
 
@@ -164,7 +163,10 @@ void ALILQRSolver<T, M, N>::GenerateTrajectory(ILQRSolverState<T, M, N> *ilqr_st
     double max_violation = Problem().GetCostUnionPtr()->GetMaxViolation();
     cout << "Solver Status : ";
     ShowSolverState();
-    cout << "max_violation : " << max_violation << "\n";
+//    cout << "max_violation : " << max_violation << "\n";
+    for (const auto & cons_ptr : Problem().GetCostUnionPtr()->GetImmutableIneqConstraints()) {
+        cout << cons_ptr->GetName() << " : " << cons_ptr->GetMaxViolation() << "\n";
+    }
     uint32_t total_time_microseconds = stop_watch_total.elapsed_microseconds();
     cout << "AL-iLQR total time : " << total_time_microseconds / 1.0e3 << "ms\n"
          << "calc Gradient and Hessian : " << derivative_time_microseconds / 1.0e3 << "ms\n"

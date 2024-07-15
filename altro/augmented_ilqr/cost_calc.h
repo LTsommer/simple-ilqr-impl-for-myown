@@ -77,15 +77,12 @@ public:
         for (int i = 0; i < num_of_cons; ++i) {
             if (i < num_of_eq_cons_) {
                 violations_(i) = eqs_[i]->GetMaxViolation();
-                cout << eqs_[i]->GetName() << ": " << violations_(i) << "\n";
             }
             else {
                 int j = i - num_of_eq_cons_;
                 violations_(i) = ineqs_[j]->GetMaxViolation();
-                cout << ineqs_[j]->GetName() << ": " << violations_(i) << "\n";
             }
         }
-        cout << "\n";
         return violations_.template lpNorm<Eigen::Infinity>();
     };
 

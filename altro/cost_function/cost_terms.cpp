@@ -84,12 +84,12 @@ template class YawRateCostFunc<double, 5, 1>;
 template class YawRateCostFunc<double, 4, 2>;
 
 template<typename T, unsigned M, unsigned int N>
-bool OffsetCostFunc<T, M, N>::Evaluate(const int step, const State &state, const Control &ctrl, double &val) const {
+bool OffsetCostFunc<T, M, N>::Evaluate(const int step, const State &x, const Control &ctrl, double &val) const {
     if (step > CostFunc<T, M, N>::horizon)
         return false;
 
-    val = 0.5 * w_offset_ * (sqr<double>(state(0) - p_ref_[step](0)) +
-                             sqr<double>(state(1) - p_ref_[step](1)));
+    val = 0.5 * w_offset_ * (sqr<double>(x(0) - p_ref_[step](0)) +
+                             sqr<double>(x(1) - p_ref_[step](1)));
 //    std::cout << "step: " << step << "\n"
 //              << "x: " << state(X) << ", " << state(Y) << "\n"
 //              << "ref: " << p_ref_[step](X) << ", " << p_ref_[step](Y) << "\n";

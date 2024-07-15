@@ -9,6 +9,8 @@ find_package(Eigen3 REQUIRED)
 message("Eigen3 found at ${EIGEN3_INCLUDE_DIR}")
 include_directories(${EIGEN3_INCLUDE_DIR})
 
+find_package(qdldl REQUIRED)
+
 #file(GLOB_RECURSE BC basic_constraint *.h *.cpp *.hpp *.cc)
 #file(GLOB_RECURSE CD constrain_definition *.h *.cpp *.hpp *.cc)
 #file(GLOB_RECURSE CF cost_function *.h *.cpp *.hpp *.cc)
@@ -22,8 +24,8 @@ file(GLOB_RECURSE CF "cost_function/*.h" "cost_function/*.cpp" "cost_function/*.
 file(GLOB_RECURSE FC "frenet_coordinate/*.h" "frenet_coordinate/*.cpp" "frenet_coordinate/*.hpp" "frenet_coordinate/*.cc")
 file(GLOB_RECURSE M "model/*.h" "model/*.cpp" "model/*.hpp" "model/*.cc")
 file(GLOB_RECURSE S "augmented_ilqr/*.h" "augmented_ilqr/*.cpp" "augmented_ilqr/*.hpp" "augmented_ilqr/*.cc")
-file(GLOB_RECURSE AL "augmented_ilqr/polished_altro/*.h" "augmented_ilqr/polished_altro/*.cpp"
-        "augmented_ilqr/polished_altro/*.hpp" "augmented_ilqr/polished_altro/*.cc")
+file(GLOB_RECURSE AL "augmented_ilqr/altro/*.h" "augmented_ilqr/altro/*.cpp"
+        "augmented_ilqr/altro/*.hpp" "augmented_ilqr/altro/*.cc")
 file(GLOB_RECURSE MP "motion_planning/*.h" "motion_planning/*.cpp" "motion_planning/*.hpp"
         "motion_planning/constrints/*.h" "motion_planning/constrints/*.hpp" "motion_planning/constrints/*.cpp"
         "motion_planning/cost_functions/*.h" "motion_planning/cost_functions/*.hpp" "motion_planning/cost_functions/*.cpp")
@@ -43,7 +45,7 @@ include_directories(cost_function)
 include_directories(basic_constraint)
 include_directories(model)
 include_directories(augmented_ilqr)
-include_directories(augmented_ilqr/polished_altro)
+include_directories(augmented_ilqr/altro)
 include_directories(frenet_coordinate)
 
 add_subdirectory(math)
@@ -80,7 +82,7 @@ add_executable(${PROJECT_NAME} main.cpp ${Header}
         ${S}
         ${AL})
 target_include_directories(${PROJECT_NAME} PUBLIC ${Python3_INCLUDE_DIRS} math)
-target_link_libraries(${PROJECT_NAME} PUBLIC Eigen3::Eigen ${Python3_LIBRARIES} geometry_lib)
+target_link_libraries(${PROJECT_NAME} PUBLIC Eigen3::Eigen ${Python3_LIBRARIES} geometry_lib qdldl::qdldl)
 
 set(mp MOTION_PLANNING)
 
@@ -95,7 +97,7 @@ add_executable(mp motion_planning/motion_planning.cpp
         ${AL}
         ${MP})
 target_include_directories(mp PUBLIC motion_planning ${Python3_INCLUDE_DIRS} math)
-target_link_libraries(mp PUBLIC Eigen3::Eigen ${Python3_LIBRARIES} geometry_lib)
+target_link_libraries(mp PUBLIC Eigen3::Eigen ${Python3_LIBRARIES} geometry_lib qdldl::qdldl)
 
 add_executable(test test_constraint.cpp
         ${Header}
@@ -106,5 +108,5 @@ add_executable(test test_constraint.cpp
         ${M}
         ${S}
         ${AL})
-target_link_libraries(test PUBLIC Eigen3::Eigen ${Python3_LIBRARIES})
+target_link_libraries(test PUBLIC Eigen3::Eigen ${Python3_LIBRARIES} qdldl::qdldl)
 
