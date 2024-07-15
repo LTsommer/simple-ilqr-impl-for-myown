@@ -348,6 +348,8 @@ private:
         if (linearized_active_cons == JacSize::None)
             return;
         MatrixXd KKT = GetKKTMatrix(D);
+        if (!KKT.allFinite() or KKT.array().isNaN().any())
+            return;
         Eigen::VectorXd b(KKT.rows());
         for (int i = 0; i < d.rows(); ++i) {
             b(M + N + i) = -d(i);
@@ -355,28 +357,6 @@ private:
         Eigen::VectorXd z = KKT.lu().solve(b).head(M + N);
         altro_x = x + z.head(M);
         altro_u = u + z.tail(N);
-//        Eigen::LLT<MatrixXd> llt(KKT);
-//        MatrixXd KKT_inv;
-//        if (llt.info() == Eigen::Success) {
-//            KKT_inv = KKT.inverse();
-//        }
-//        else {
-//            KKT_inv = PseudoInverse(KKT);
-//        }
-//        if (!KKT_inv.allFinite() or KKT_inv.array().isNaN().any() or KKT_inv.sum() < kTol) {
-//            cout << "fail to calc Inverse\n";
-//            return;
-//        }
-//
-//        Eigen::Matrix<T, Eigen::Dynamic, 1> b;
-//        b.setZero(KKT.rows());
-//        for (int i = 0; i < d.rows(); ++i) {
-//            b(M + N + i) = d(i);
-//        }
-//        MatrixXd delta_Z = KKT_inv * b;
-//        altro_x = x + delta_Z.topRows(M);
-//        altro_u = u + delta_Z.bottomRows(N);
-//        QDLDLSolver(KKT, d, altro_x, altro_u);
     }
 
 //    void Projection(const int step, State x, Control u,
