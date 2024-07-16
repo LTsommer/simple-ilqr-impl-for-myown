@@ -160,6 +160,10 @@ private:
             MatrixLUU cur_luu;
             MatrixLXU cur_lxu;
             ct->Hessian(step, x, u, cur_lxx, cur_luu, cur_lxu);
+//            cout << ct->GetName() << endl;
+//            cout << "cur_lxx : " << endl << cur_lxx << endl;
+//            cout << "cur_luu : " << endl << cur_luu << endl;
+//            cout << "cur_lxu : " << endl << cur_lxu << endl;
             lxx += cur_lxx;
             luu += cur_luu;
             lxu += cur_lxu;
@@ -190,12 +194,10 @@ private:
         vector<long long> Ap{0};
         vector<long long> Ai;
         vector<double> Ax;
-        vector<double> b(An, 0.0);
-        cout << KKT << endl << endl;
         int ap = 0;
         for (int i = 0; i < KKT.cols(); ++i) {
             int ai = 0;
-            for (int j = 0; j < KKT.rows(); ++j) {
+            for (int j = 0; j <= i; ++j) {
                 if (std::fabs(KKT(j, i)) > kZeroTol) {
                     ++ai;
                     Ai.emplace_back(j);
@@ -205,29 +207,42 @@ private:
             ap += ai;
             Ap.emplace_back(ap);
         }
+        Eigen::VectorXd b(KKT.rows());
+        b.setZero();
         for (int i = 0; i < d.rows(); ++i) {
-            b[M + N + i] = d(i);
+            b(M + N + i) = -d(i);
         }
+//        vector<double> b(An, 0.0);
+//        for (int i = 0; i < d.rows(); ++i) {
+//            b[M + N + i] = -d(i);
+//        }
 
-        cout << "An : " << An << endl;
-        cout << "Ap size : " << Ap.size() << endl;
-        std::for_each(Ap.begin(), Ap.end(), [](const auto &num){cout << num << " ";});
-        cout << endl;
-        cout << "Ai size : " << Ai.size() << endl;
-        std::for_each(Ai.begin(), Ai.end(), [](const auto &num){cout << num << " ";});
-        cout << endl;
-        cout << "Ax size : " << Ax.size() << endl;
-        std::for_each(Ax.begin(), Ax.end(), [](const auto &num){cout << num << " ";});
-        cout << endl;
-        cout << "b size : " << b.size() << endl;
-        std::for_each(b.begin(), b.end(), [](const auto &num){cout << num << " ";});
-        cout << endl;
+//        cout << KKT << endl;
+//        cout << "An : " << An << endl;
+//        cout << "Ap size : " << Ap.size() << endl;
+//        std::for_each(Ap.begin(), Ap.end(), [](const auto &num){cout << num << " ";});
+//        cout << endl;
+//        cout << "Ai size : " << Ai.size() << endl;
+//        std::for_each(Ai.begin(), Ai.end(), [](const auto &num){cout << num << " ";});
+//        cout << endl;
+//        cout << "Ax size : " << Ax.size() << endl;
+//        std::for_each(Ax.begin(), Ax.end(), [](const auto &num){cout << num << " ";});
+//        cout << endl;
+//        cout << "b size : " << b.size() << endl;
+//        std::for_each(b.begin(), b.end(), [](const auto &num){cout << num << " ";});
+//        cout << endl;
         vector<double> rst = QDLDLSolve(An, Ap.data(), Ai.data(), Ax.data(), b.data());
+//        Eigen::VectorXd z_ = KKT.lu().solve(b).head(M + N);
+//        cout << "eigen rst : " << z_.transpose() << endl;
+//        std::for_each(rst.begin(), rst.end(), [](const double &num){cout << num << " ";});
+//        cout << "\n";
         Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, 1>> z(rst.data(), M + N);
-        cout << "qdldl end\n";
+
+
+//        cout << "qdldl end\n";
         x = z.head(M);
         u = z.tail(N);
-        cout << "qdldl solve successfully\n";
+//        cout << "qdldl solve successfully\n";
     }
 
     /* in this ocp, inequality constraints are defined as g(x) < 0
@@ -245,26 +260,8 @@ private:
         vector<double> violations;
         MatrixZs JacVec;
         int index = 0;
-        eq_active_sets_.clear();
+//        eq_active_sets_.clear();
         ineq_active_sets_.clear();
-//        for (auto &cons_ptr : solver_->Problem().GetCostUnionPtr()->GetImmutableEqConstraints()) {
-//            bool success = cons_ptr->Evaluate(step, x, u);
-//            if (success) {
-//                double cons_val = cons_ptr->ConsVal();
-//                if (cons_val < kDefaultConstraintEpsilon) {
-//                    violations.emplace_back(cons_val);
-//                    cons_ptr->Gradient(step, x, u);
-//                    VecX cur_lx = cons_ptr->GradientX();
-//                    VecU cur_lu = cons_ptr->GradientU();
-//                    MatrixZ gz;
-//                    gz << cur_lx, cur_lu;
-//                    JacVec.emplace_back(gz);
-//                    eq_active_sets_.emplace_back(index);
-//                    index++;
-//                }
-//            }
-//        }
-
         index = 0;
         for (auto &cons_ptr : solver_->Problem().GetCostUnionPtr()->GetImmutableIneqConstraints()) {
             bool success = cons_ptr->Evaluate(step, x, u);
@@ -317,20 +314,20 @@ private:
 //        cout << "d=\n" << d << endl;
     }
 
-    Eigen::MatrixXd PseudoInverse(const Eigen::MatrixXd& mat, double tolerance = 1e-6) {
-        Eigen::JacobiSVD<Eigen::MatrixXd> svd(mat, Eigen::ComputeThinU | Eigen::ComputeThinV);
-        Eigen::VectorXd singularValues = svd.singularValues();
-        Eigen::MatrixXd singularValuesInv(mat.cols(), mat.rows());
-        singularValuesInv.setZero();
-
-        for (int i = 0; i < singularValues.size(); ++i) {
-            if (singularValues(i) > tolerance) {
-                singularValuesInv(i, i) = 1.0 / singularValues(i);
-            }
-        }
-
-        return svd.matrixV() * singularValuesInv * svd.matrixU().transpose();
-    }
+//    Eigen::MatrixXd PseudoInverse(const Eigen::MatrixXd& mat, double tolerance = 1e-6) {
+//        Eigen::JacobiSVD<Eigen::MatrixXd> svd(mat, Eigen::ComputeThinU | Eigen::ComputeThinV);
+//        Eigen::VectorXd singularValues = svd.singularValues();
+//        Eigen::MatrixXd singularValuesInv(mat.cols(), mat.rows());
+//        singularValuesInv.setZero();
+//
+//        for (int i = 0; i < singularValues.size(); ++i) {
+//            if (singularValues(i) > tolerance) {
+//                singularValuesInv(i, i) = 1.0 / singularValues(i);
+//            }
+//        }
+//
+//        return svd.matrixV() * singularValuesInv * svd.matrixU().transpose();
+//    }
 
     void Projection(const int step, State x, Control u,
                     State &altro_x, Control &altro_u) {
@@ -350,13 +347,24 @@ private:
         MatrixXd KKT = GetKKTMatrix(D);
         if (!KKT.allFinite() or KKT.array().isNaN().any())
             return;
+
+        /*----------------- use Eigen to solve KKT equation -----------------*/
         Eigen::VectorXd b(KKT.rows());
+        b.setZero();
         for (int i = 0; i < d.rows(); ++i) {
             b(M + N + i) = -d(i);
         }
+
         Eigen::VectorXd z = KKT.lu().solve(b).head(M + N);
         altro_x = x + z.head(M);
         altro_u = u + z.tail(N);
+
+        /*----------------- use qdldl solver to solve KKT equation -----------------*/
+//        State delta_x;
+//        Control delta_u;
+//        QDLDLSolver(KKT, d, delta_x, delta_u);
+//        altro_x = x + delta_x;
+//        altro_u = u + altro_u;
     }
 
 //    void Projection(const int step, State x, Control u,

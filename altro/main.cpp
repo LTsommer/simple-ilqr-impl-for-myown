@@ -173,7 +173,8 @@ int main() {
 //            cout << "delta vel = " << velocity[i] - velocity[i - 1] << "\n";
             double acc = (velocity[i] - velocity[i - 1]) / t;
 //            cout << "step = " << step << "\n";
-//            cout << "acc = " << acc << "\n";
+            acc = std::min(4.0, std::max(-2.0, acc));
+            cout << "acc = " << acc << "\n";
             ds.emplace_back(step);
             dt.emplace_back(t);
             acceleration.emplace_back(acc);

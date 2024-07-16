@@ -228,6 +228,12 @@ bool CurvatureCostFunc<T, M, N>::Hessian(const int step, const State &x, const C
 template class CurvatureCostFunc<double, 5, 1>;
 template class CurvatureCostFunc<double, 4, 2>;
 
+/*
+  J_comfort = 1/2 * w_acc * (V^2 * kappa)^2
+            + 1/2 * w_jerk * (2 * V * A * kappa + V^3 * dkappa)^2
+  where V is the velocity, A is the acceleration, kappa is the curvature, and
+  dkappa is the curvature's rate of change
+ */
 template<typename T, unsigned M, unsigned int N>
 bool LateralComfortCostFunc<T, M, N>::Evaluate(const int step, const State &state, const Control &ctrl, double &val) const {
     if (step > CostFunc<T, M, N>::horizon)
@@ -235,11 +241,17 @@ bool LateralComfortCostFunc<T, M, N>::Evaluate(const int step, const State &stat
 
     val = 0.5 * w_acc_ * sqr(sqr(velocity_[step]) * state(kKappa)) +
           0.5 * w_jerk_ *
-          sqr(3 * velocity_[step] * acceleration_[step] * state(kKappa) +
+          sqr(2 * velocity_[step] * acceleration_[step] * state(kKappa) +
               cube(velocity_[step]) * state(kDkappa));
     return true;
 }
 
+/*
+  J_comfort = 1/2 * w_acc * (V^2 * kappa)^2
+            + 1/2 * w_jerk * (2 * V * A * kappa + V^3 * dkappa)^2
+  where V is the velocity, A is the acceleration, kappa is the curvature, and
+  dkappa is the curvature's rate of change
+ */
 template<typename T, unsigned M, unsigned int N>
 bool LateralComfortCostFunc<T, M, N>::Gradient(const int step, const State &x, const Control &u,
                                                Eigen::Ref<VecX> lx, Eigen::Ref<VecU> lu) const {
@@ -250,7 +262,7 @@ bool LateralComfortCostFunc<T, M, N>::Gradient(const int step, const State &x, c
 
     lx(kKappa) =
             (w_acc_ * pow(velocity_[step], 4) +
-             9 * w_jerk_ * sqr(velocity_[step]) * sqr(acceleration_[step])) *
+             4 * w_jerk_ * sqr(velocity_[step]) * sqr(acceleration_[step])) *
             x(kKappa) +
             cross_coeff_[step] * x(kDkappa);
     lx(kDkappa) = cross_coeff_[step] * x(kKappa) +
@@ -272,7 +284,7 @@ bool LateralComfortCostFunc<T, M, N>::Hessian(const int step, const State &x, co
 
     lxx(kKappa, kKappa) =
             w_acc_ * pow(velocity_[step], 4) +
-            9 * w_jerk_ * sqr(velocity_[step]) * sqr(acceleration_[step]);
+            4 * w_jerk_ * sqr(velocity_[step]) * sqr(acceleration_[step]);
     lxx(kKappa, kDkappa) = cross_coeff_[step];
     lxx(kDkappa, kKappa) = cross_coeff_[step];
     lxx(kDkappa, kDkappa) = w_jerk_ * pow(velocity_[step], 6);

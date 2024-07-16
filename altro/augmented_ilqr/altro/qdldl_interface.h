@@ -15,12 +15,11 @@ using std::cout;
 using std::endl;
 
 inline vector<double> QDLDLSolve(const QDLDL_int &An,
-                                 QDLDL_int *Ap,
-                                 QDLDL_int *Ai,
+                                 QDLDL_int  *Ap,
+                                 QDLDL_int  *Ai,
                                  QDLDL_float *Ax,
                                  QDLDL_float *b) {
     QDLDL_int i; // Counter
-    cout << "in qdldl solver\n";
     //data for L and D factors
     QDLDL_int Ln = An;
     QDLDL_int *Lp;
