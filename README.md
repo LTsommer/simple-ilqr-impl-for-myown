@@ -16,8 +16,8 @@
 
 | 目标 | 入口 | 状态与控制 | 离散变量 |
 | --- | --- | --- | --- |
-| 曲率平滑与道路边界约束 | `main.cpp` | $x=[p_x,p_y,\theta,\kappa,\dot\kappa]$，$u=[\ddot\kappa]$ | 弧长 $ds$ |
-| 横纵向耦合的轨迹优化 | `motion_planning/motion_planning.cpp` | $x=[p_x,p_y,\theta,\kappa,v,a]$，$u=[j,\dot\kappa]$ | 时间 $dt$ |
+| 曲率平滑与道路边界约束 | `main.cpp` | $x=[p_x,p_y,\theta,\kappa,\dot\kappa]$ <br> $u=[\ddot\kappa]$ | 弧长 $ds$ |
+| 横纵向耦合的轨迹优化 | `motion_planning/motion_planning.cpp` | $x=[p_x,p_y,\theta,\kappa,v,a]$ <br> $u=[j,\dot\kappa]$ | 时间 $dt$ |
 
 后一个模型覆盖了 jerk、曲率变化率、速度、加速度、向心加速度/jerk、航向误差以及道路安全距离等常见车辆规划项。位置积分使用 10 点 Gauss–Legendre 积分，以减小简单欧拉积分对曲线段的累计误差。
 
@@ -154,6 +154,26 @@ $$
 
 `ALTROSolver` 先运行 AL-iLQR，再基于当前时刻的活动约束计算约束 Jacobian $D$ 和代价 Hessian $H$，并对状态-控制增量进行目标函数加权投影。它的目的不是继续大幅降低代价，而是在保持局部最优解质量的同时降低最终违反量。
 
+对第 $t$ 个节点，令状态与控制拼接为 $z_t=[x_t^T,u_t^T]^T$。代码会从当前活动集构造约束 Jacobian $D_t$，并将活动约束的残差收集为 $r_t$；同时只使用**原始代价项**的 Hessian 组成 $H_t$。局部投影问题写成：
+
+$$
+\begin{aligned}
+\min_{\delta z_t}\quad & \frac{1}{2}\delta z_t^T H_t\delta z_t\\
+\text{s.t.}\quad & D_t\delta z_t=r_t.
+\end{aligned}
+$$
+
+当 $H_t$ 与 $D_tH_t^{-1}D_t^T$ 可逆时，代码中的更新为：
+
+$$
+\delta z_t=H_t^{-1}D_t^T
+\left(D_tH_t^{-1}D_t^T\right)^{-1}r_t,
+\qquad
+z_t^+=z_t+\alpha\delta z_t.
+$$
+
+其中 $\alpha$ 从 1 开始折半；只有活动约束残差的无穷范数下降时才接受更新。对 Cholesky 分解失败的矩阵，`ALTROSolver` 会退回到 SVD 伪逆。这里 $r_t$ 的符号遵循每个具体约束在代码中的定义，扩展新约束时不应机械替换为 $-c_t$。
+
 需要特别注意：此仓库的 polishing 是**逐时刻**构造并求解局部投影，而不是论文中将整个 horizon 联合成一个大 KKT 系统的实现。因此它应视为一个实用的近似投影版本，而不能与原论文的完整算法逐项等同。
 
 ## 关键实现对应关系
@@ -191,7 +211,7 @@ $$
 x=[p_x,p_y,\theta,\kappa,v,a],\qquad u=[j,\dot\kappa].
 $$
 
-位置变化由速度和航向的积分给出；实现使用 `calculus.h` 中的 10 点 Gauss–Legendre 公式计算 $\Delta p_x$、$\Delta p_y$。`motion_planning/motion_planning.cpp` 在此基础上注册向心加速度、向心 jerk、曲率变化率、纵向 jerk、参考线偏移和目标速度等代价，并加入相应的动力学和道路安全约束。
+位置变化由速度和航向的积分给出；实现使用 `calculus.h` 中的 10 点 Gauss–Legendre 公式计算 $\Delta p_x$ 和 $\Delta p_y$。`motion_planning/motion_planning.cpp` 在此基础上注册向心加速度、向心 jerk、曲率变化率、纵向 jerk、参考线偏移和目标速度等代价，并加入相应的动力学和道路安全约束。
 
 ## 构建与运行
 
