@@ -16,8 +16,8 @@
 
 | 目标 | 入口 | 状态与控制 | 离散变量 |
 | --- | --- | --- | --- |
-| 曲率平滑与道路边界约束 | `main.cpp` | 状态：位置、航向、曲率、曲率变化率<br>控制：曲率二阶导 | 弧长 `ds` |
-| 横纵向耦合的轨迹优化 | `motion_planning/motion_planning.cpp` | 状态：位置、航向、曲率、速度、加速度<br>控制：jerk、曲率变化率 | 时间 `dt` |
+| 曲率平滑与道路边界约束 | `main.cpp` | $x=[p_x,p_y,\theta,\kappa,\dot\kappa]$ <br> $u=[\ddot\kappa]$ | 弧长 $ds$ |
+| 横纵向耦合的轨迹优化 | `motion_planning/motion_planning.cpp` | $x=[p_x,p_y,\theta,\kappa,v,a]$ <br> $u=[j,\dot\kappa]$ | 时间 $dt$ |
 
 后一个模型覆盖了 jerk、曲率变化率、速度、加速度、向心加速度/jerk、航向误差以及道路安全距离等常见车辆规划项。位置积分使用 10 点 Gauss–Legendre 积分，以减小简单欧拉积分对曲线段的累计误差。
 
